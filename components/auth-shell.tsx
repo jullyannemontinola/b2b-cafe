@@ -5,11 +5,8 @@ import { CalendarDaysIcon, CoffeeIcon, MapPinIcon } from "lucide-react"
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] border border-border bg-card shadow-soft lg:grid-cols-[1fr_1.05fr]">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-card lg:grid-cols-[1fr_1.05fr]">
         <section className="relative isolate overflow-hidden bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 lg:py-12">
-          <div aria-hidden className="absolute -top-24 -right-20 -z-10 size-72 rounded-full bg-white/10" />
-          <div aria-hidden className="absolute -bottom-28 -left-16 -z-10 size-80 rounded-full bg-[#0f46d6]" />
-          <div aria-hidden className="absolute right-10 bottom-16 -z-10 size-16 rounded-full bg-white/15" />
           <div className="flex h-full flex-col gap-10 lg:gap-16">
             <span className="flex items-center gap-2.5">
               <span aria-hidden className="flex size-9 items-center justify-center rounded-xl bg-white text-primary">
@@ -18,15 +15,14 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               <span className="text-[15px] font-extrabold tracking-tight">B2B Café</span>
             </span>
             <div className="space-y-4">
-              <h2 className="max-w-sm text-3xl leading-[1.1] sm:text-4xl">Meet the right companies, one table at a time.</h2>
+              <h2 className="max-w-sm text-3xl leading-[1.1] sm:text-4xl">Meeting scheduling for B2B Café participants</h2>
               <p className="max-w-sm text-[15px] leading-relaxed text-white/85">
-                Private scheduling for approved companies at the 4th IoT Conference Philippines and the 1st AI
-                Philippine Expo.
+                At the 4th IoT Conference Philippines and the 1st AI Philippine Expo.
               </p>
             </div>
             <ul className="mt-auto flex flex-wrap gap-2 text-sm font-semibold">
               <li className="flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-2">
-                <CalendarDaysIcon className="size-4" /> 10–11 Nov 2026
+                <CalendarDaysIcon className="size-4" /> November 10–11, 2026
               </li>
               <li className="flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-2">
                 <MapPinIcon className="size-4" /> Megatrade Halls, SM Megamall

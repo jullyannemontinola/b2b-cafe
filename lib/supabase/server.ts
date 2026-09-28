@@ -30,7 +30,7 @@ export async function createClient() {
 export type Viewer =
   | { kind: "admin"; userId: string }
   | { kind: "company"; userId: string; companyId: string; companyName: string }
-  | { kind: "inactive"; userId: string } // signed in, but no active company or role
+  | { kind: "unlinked"; userId: string } // signed in, but not linked to an organization or role
 
 // The signed-in user's role, or null when signed out. Cached per request.
 export const getViewer = cache(async (): Promise<Viewer | null> => {
@@ -40,14 +40,14 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!userId) return null
   const { data } = await supabase
     .from("app_users")
-    .select("company_id, is_admin, companies(name, is_active)")
+    .select("company_id, is_admin, companies(name)")
     .eq("id", userId)
     .maybeSingle()
   if (data?.is_admin) return { kind: "admin", userId }
-  if (data?.company_id && data.companies?.is_active) {
+  if (data?.company_id && data.companies) {
     return { kind: "company", userId, companyId: data.company_id, companyName: data.companies.name }
   }
-  return { kind: "inactive", userId }
+  return { kind: "unlinked", userId }
 })
 
 export function homeFor(viewer: Viewer | null) {

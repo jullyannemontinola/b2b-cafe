@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRightIcon, CalendarCheckIcon, ClockIcon, MapPinIcon, MessagesSquareIcon, TableIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarCheckIcon, MessagesSquareIcon } from "lucide-react"
 import type { CounterpartData } from "@/components/company-sheet"
 import { CompanyLogo } from "@/components/company-logo"
 import { CompanyProfile } from "@/components/company-profile"
@@ -156,13 +156,13 @@ function MeetingBlock({ event, style }: { event: CalendarEvent; style: React.CSS
           <button
             type="button"
             style={style}
-            aria-label={`Confirmed meeting with ${c?.name ?? "a company"}, ${event.dayLabel}, ${event.timeLabel}${event.table ? `, ${event.table.label}` : ""}. Open details.`}
-            className="@container absolute z-10 flex flex-col justify-center overflow-hidden rounded-xl bg-primary px-2.5 py-1 text-left text-primary-foreground shadow-[0_6px_14px_-8px_rgb(21_84_240/0.9)] transition-[background-color,box-shadow] duration-150 hover:bg-primary-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none"
+            aria-label={`Confirmed meeting with ${c?.name ?? "an organization"}, ${event.dayLabel}, ${event.timeLabel}${event.table ? `, ${event.table.label}` : ""}. Open details.`}
+            className="@container absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg bg-primary px-2.5 py-1 text-left text-primary-foreground transition-[background-color,box-shadow] duration-150 hover:bg-primary-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none"
           />
         }
       >
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] leading-tight font-bold">{c?.name ?? "Unavailable company"}</span>
+          <span className="truncate text-[13px] leading-tight font-bold">{c?.name ?? "Unavailable organization"}</span>
           {c?.tier && <TierBadge tier={c.tier} size="sm" className="hidden h-5 @[15rem]:inline-flex" />}
         </span>
         <span className="tabular truncate text-[11px] text-primary-foreground/85">
@@ -175,33 +175,33 @@ function MeetingBlock({ event, style }: { event: CalendarEvent; style: React.CSS
           <SheetTitle className="flex items-center gap-2 text-sm font-bold text-confirmed">
             <CalendarCheckIcon className="size-4" /> Confirmed meeting
           </SheetTitle>
-          <SheetDescription className="sr-only">Meeting details and company information</SheetDescription>
+          <SheetDescription className="sr-only">Meeting details and organization details</SheetDescription>
         </SheetHeader>
         <div className="space-y-6 px-6 py-6">
           <div className="flex items-center gap-3">
-            <CompanyLogo name={c?.name ?? "?"} logoUrl={c?.logo_url ?? null} className="size-12" />
+            <CompanyLogo id={c?.id} name={c?.name ?? "?"} logoUrl={c?.logo_url ?? null} className="size-12" />
             <div className="min-w-0 space-y-1">
-              <p className="truncate text-lg font-bold">{c?.name ?? "Unavailable company"}</p>
+              <p className="truncate text-lg font-bold">{c?.name ?? "Unavailable organization"}</p>
               <TierBadge tier={c?.tier} size="sm" />
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-2 text-sm">
-            <Fact icon={<CalendarCheckIcon />} label="Date">{event.dayLabel}, 2026</Fact>
-            <Fact icon={<ClockIcon />} label="Time (Philippine time)">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <Fact label="Date">{event.dayLabel}, 2026</Fact>
+            <Fact label="Time (Philippine time, UTC+8)">
               <span className="tabular">{event.timeLabel}</span>
             </Fact>
-            <Fact icon={<TableIcon />} label="Table">{event.table?.label ?? "—"}</Fact>
-            <Fact icon={<MapPinIcon />} label="Location">{event.table?.location ?? "—"}</Fact>
+            <Fact label="Table">{event.table?.label ?? "—"}</Fact>
+            <Fact label="Location">{event.table?.location ?? "—"}</Fact>
           </dl>
           {event.meetingId && <p className="tabular text-xs font-semibold text-muted-foreground">Meeting ID {event.meetingId.slice(0, 8).toUpperCase()}</p>}
           <Button variant="soft" className="w-full" nativeButton={false} render={<Link href={`/inbox/${event.threadId}`} />}>
-            <MessagesSquareIcon /> Open negotiation history
+            <MessagesSquareIcon /> Open meeting request
           </Button>
           {c && "contact_email" in c && (
-            <section aria-label="Company information" className="space-y-4 border-t border-border pt-6">
+            <section aria-label="Organization details" className="space-y-4 border-t border-border pt-6">
               <CompanyProfile company={c} headingLevel="h2" />
               <Button variant="outline" className="w-full" nativeButton={false} render={<Link href={`/companies/${c.id}`} />}>
-                Open full profile page <ArrowRightIcon />
+                Open details page <ArrowRightIcon />
               </Button>
             </section>
           )}
@@ -213,27 +213,24 @@ function MeetingBlock({ event, style }: { event: CalendarEvent; style: React.CSS
 
 function PendingBlock({ event, style }: { event: CalendarEvent; style: React.CSSProperties }) {
   const incoming = event.kind === "incoming"
-  const name = event.counterpart?.name ?? "a company"
+  const name = event.counterpart?.name ?? "an organization"
   return (
     <Link
       href={`/inbox/${event.threadId}`}
       style={style}
-      aria-label={`Pending, not reserved: ${incoming ? `request from ${name} waiting for your reply` : `your offer to ${name}`}, ${event.dayLabel}, ${event.timeLabel}. Open negotiation.`}
-      className="absolute z-20 flex flex-col justify-center overflow-hidden rounded-xl border-2 border-dashed border-pending/50 bg-pending-surface/90 px-2 py-1 text-pending transition-colors duration-150 hover:border-pending hover:bg-pending-surface focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      aria-label={`Pending, not reserved: ${incoming ? `your response needed for ${name}` : `awaiting ${name}`}, ${event.dayLabel}, ${event.timeLabel}. Open meeting request.`}
+      className="absolute z-20 flex flex-col justify-center overflow-hidden rounded-lg border-2 border-dashed border-pending/50 bg-pending-surface/90 px-2 py-1 text-pending transition-colors duration-150 hover:border-pending hover:bg-pending-surface focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
     >
-      <span className="truncate text-[11px] font-extrabold tracking-wide uppercase">{incoming ? "Pending · reply" : "Pending · sent"}</span>
-      <span className="truncate text-[12px] leading-tight font-semibold">{event.counterpart?.name ?? "Unavailable company"}</span>
+      <span className="truncate text-[11px] font-bold">{incoming ? "Your response needed" : "Awaiting response"}</span>
+      <span className="truncate text-[12px] leading-tight font-semibold">{event.counterpart?.name ?? "Unavailable organization"}</span>
     </Link>
   )
 }
 
-function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-muted/70 px-3.5 py-2.5">
-      <dt className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground [&>svg]:size-3.5">
-        {icon}
-        {label}
-      </dt>
+    <div>
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-bold">{children}</dd>
     </div>
   )

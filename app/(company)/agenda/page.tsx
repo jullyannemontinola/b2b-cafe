@@ -1,19 +1,19 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRightIcon, CalendarDaysIcon, InfoIcon, ListIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarDaysIcon, ListIcon } from "lucide-react"
 import { AgendaCalendar, type CalendarEvent } from "@/components/agenda-calendar"
-import { PageHeader } from "@/components/app-shell"
-import { CompanyLogo } from "@/components/company-logo"
+import { HelpButton } from "@/components/help"
 import { StatusBadge, UnreadDot } from "@/components/status-badge"
 import { TierBadge } from "@/components/tier-badge"
 import { Button } from "@/components/ui/button"
+import { NAV, requestStatus } from "@/lib/copy"
 import { formatDay, formatRange, getEventConfig, isPast, localParts, tzLabel } from "@/lib/event"
 import { createClient, requireCompany } from "@/lib/supabase/server"
 import { isUnread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { PendingToggle } from "./agenda-controls"
 
-export const metadata: Metadata = { title: "Agenda" }
+export const metadata: Metadata = { title: NAV.schedule }
 
 const AGENDA_COLUMNS =
   "id, status, current_version, last_activity_at, a_last_read_at, b_last_read_at, company_a_id, company_b_id, offers(version, proposer_company_id, starts_at, ends_at), meetings(id, starts_at, ends_at, meeting_tables(label, location))"
@@ -54,6 +54,7 @@ export default async function AgendaPage({ searchParams }: PageProps<"/agenda">)
       latest,
       unread: isUnread(t, viewer.companyId),
       incoming: latest.proposer_company_id !== viewer.companyId,
+      revised: t.current_version > 1,
     }
   })
   const dayOf = (iso: string) => localParts(iso, tz).date
@@ -72,9 +73,10 @@ export default async function AgendaPage({ searchParams }: PageProps<"/agenda">)
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Agenda" description={`Your meetings at B2B Café. All times in ${tzLabel(tz)} (UTC+08:00).`}>
-        <nav aria-label="Agenda view" className="flex gap-1 rounded-full bg-muted p-1">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <h1 className="mr-auto text-2xl leading-tight">{NAV.schedule}</h1>
+        <nav aria-label="Schedule view" className="flex gap-1 rounded-full bg-muted p-1 sm:order-last">
           {(
             [
               ["list", "List", ListIcon],
@@ -94,10 +96,10 @@ export default async function AgendaPage({ searchParams }: PageProps<"/agenda">)
             </Link>
           ))}
         </nav>
-      </PageHeader>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Event day" className={cn("flex gap-1 rounded-full bg-muted p-1", view === "calendar" && "md:hidden")}>
+        <nav
+          aria-label="Event day"
+          className={cn("flex w-full gap-1 overflow-x-auto rounded-full bg-muted p-1 sm:w-auto", view === "calendar" && "md:hidden")}
+        >
           {(view === "list" ? ["", ...config.eventDates] : config.eventDates).map((d) => {
             const active = view === "calendar" ? (day || config.eventDates[0]) === d : day === d
             return (
@@ -106,16 +108,30 @@ export default async function AgendaPage({ searchParams }: PageProps<"/agenda">)
                 href={params({ day: d || null })}
                 aria-current={active ? "true" : undefined}
                 className={cn(
-                  "flex h-8 items-center rounded-full px-3.5 text-sm font-semibold whitespace-nowrap transition-colors duration-150",
+                  "flex h-9 flex-1 items-center justify-center rounded-full px-3.5 text-sm font-semibold whitespace-nowrap transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none sm:flex-none",
                   active ? "bg-card text-primary shadow-soft" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {d ? formatDay(d, tz) : "All days"}
+                {d ? formatDay(d, tz) : "Both days"}
               </Link>
             )
           })}
         </nav>
-        {view === "calendar" && <PendingToggle on={showPending} />}
+      </div>
+
+      <div className="-mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
+        <p className="font-semibold text-muted-foreground">
+          B2B Café, November 10–11, 2026 · All times in {tzLabel(tz)} (UTC+8)
+        </p>
+        {view === "calendar" && (
+          <span className="flex items-center gap-1">
+            <PendingToggle on={showPending} />
+            <HelpButton title="Pending requests in the calendar" more="/help?topic=schedule">
+              <p>Pending requests are not confirmed bookings and may overlap with each other or with your meetings.</p>
+              <p>Only confirmed meetings have a table. Open a pending request to respond or check who it’s awaiting.</p>
+            </HelpButton>
+          </span>
+        )}
       </div>
 
       {view === "calendar" ? (
@@ -171,7 +187,8 @@ type Row = {
   counterpart: { id: string; name: string; tier: string; logo_url: string | null } | null
   latest: { starts_at: string; ends_at: string }
   unread: boolean
-  incoming: boolean
+  incoming: boolean // the viewer needs to respond
+  revised: boolean
 }
 
 function CalendarView({
@@ -190,17 +207,17 @@ function CalendarView({
     <div className="space-y-4">
       <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-muted-foreground" aria-label="Legend">
         <li className="flex items-center gap-2">
-          <span aria-hidden className="h-3.5 w-6 rounded-md bg-primary" /> Confirmed meeting (table booked)
+          <span aria-hidden className="h-3.5 w-6 rounded-md bg-primary" /> Confirmed meeting (table assigned)
         </li>
         {showPending && (
           <li className="flex items-center gap-2">
-            <span aria-hidden className="h-3.5 w-6 rounded-md border-2 border-dashed border-pending/60 bg-pending-surface" /> Pending proposal (not reserved)
+            <span aria-hidden className="h-3.5 w-6 rounded-md border-2 border-dashed border-pending/60 bg-pending-surface" /> Pending request (not reserved)
           </li>
         )}
       </ul>
       {confirmedCount === 0 && !(showPending && events.length) && (
-        <p className="rounded-2xl bg-secondary/70 px-4 py-3 text-sm font-medium text-secondary-foreground">
-          No confirmed meetings yet. Accepted proposals appear here as blue blocks{showPending ? "" : "; turn on pending proposals to see offers still being negotiated"}.
+        <p className="text-sm font-medium text-muted-foreground">
+          No confirmed meetings yet. They appear here as blue blocks once a request is confirmed{showPending ? "" : ". Turn on pending requests to see times still awaiting a response"}.
         </p>
       )}
       <AgendaCalendar
@@ -212,9 +229,9 @@ function CalendarView({
         timezoneLabel="PHT UTC+8"
         events={events}
       />
-      <p className="flex items-start gap-2 text-xs text-muted-foreground">
-        <InfoIcon className="mt-px size-3.5 shrink-0" />
-        Empty time only means you have nothing booked. The other company’s availability and table capacity are checked when you propose and again when a proposal is accepted.
+      <p className="text-xs text-muted-foreground">
+        An empty time only means you have nothing confirmed then. The other organization’s availability and tables are checked when you
+        request a time and again when it’s confirmed.
       </p>
     </div>
   )
@@ -223,16 +240,16 @@ function CalendarView({
 function ListView({ tz, day, confirmed, pending }: { tz: string; day: string; confirmed: Row[]; pending: Row[] }) {
   const upcoming = confirmed.filter((r) => !isPast(r.t.meetings!.ends_at))
   const past = confirmed.filter((r) => isPast(r.t.meetings!.ends_at)).reverse()
-  const scope = day ? ` on ${formatDay(day, tz)}` : ""
+  const scope = day ? ` for ${formatDay(day, tz)}` : ""
   return (
-    <div className="space-y-10">
+    <div className="space-y-9">
       <section aria-labelledby="upcoming" className="space-y-4">
-        <SectionTitle id="upcoming" count={upcoming.length}>Upcoming meetings</SectionTitle>
+        <SectionTitle id="upcoming" count={upcoming.length}>Confirmed meetings</SectionTitle>
         {upcoming.length === 0 ? (
           <Empty>
-            No confirmed meetings{scope} yet. Meetings appear here once a proposal is accepted.
+            No confirmed meetings{scope}. Meetings appear here with their table once a request is confirmed.
             <Button variant="soft" size="sm" className="mt-4" nativeButton={false} render={<Link href="/companies" />}>
-              Find companies <ArrowRightIcon />
+              Browse participants <ArrowRightIcon />
             </Button>
           </Empty>
         ) : (
@@ -241,30 +258,33 @@ function ListView({ tz, day, confirmed, pending }: { tz: string; day: string; co
       </section>
 
       <section aria-labelledby="pending" className="space-y-4">
-        <SectionTitle id="pending" count={pending.length}>Pending negotiations</SectionTitle>
-        <p className="-mt-2 text-sm text-muted-foreground">Not booked yet. These times aren’t reserved until accepted.</p>
+        <SectionTitle id="pending" count={pending.length}>Awaiting response</SectionTitle>
+        <p className="-mt-2 text-sm text-muted-foreground">Not reserved. These times are held only once confirmed.</p>
         {pending.length === 0 ? (
-          <Empty>No open proposals{scope}.</Empty>
+          <Empty>No open requests{scope}.</Empty>
         ) : (
           <ul className="space-y-2">
-            {pending.map(({ t, counterpart, latest, unread, incoming }) => (
+            {pending.map(({ t, counterpart, latest, unread, incoming, revised }) => {
+              const status = requestStatus({ status: "pending", waitingOn: incoming ? null : (counterpart?.name ?? "the other organization"), revised })
+              return (
               <li key={t.id}>
                 <Link
                   href={`/inbox/${t.id}`}
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border-2 border-dashed border-pending/30 bg-card px-4 py-3.5 transition-colors duration-150 hover:bg-pending-surface/50 sm:px-5"
                 >
-                  <span className="tabular w-full text-sm text-muted-foreground sm:w-48">
+                  <span className="tabular w-full text-sm whitespace-nowrap text-muted-foreground sm:w-60">
                     {formatDay(latest.starts_at, tz)} · {formatRange(latest.starts_at, latest.ends_at, tz)}
                   </span>
                   <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate font-bold">{counterpart?.name ?? "Unavailable company"}</span>
+                    <span className="truncate font-bold">{counterpart?.name ?? "Unavailable organization"}</span>
                     {counterpart && <TierBadge tier={counterpart.tier} size="sm" />}
                   </span>
                   {unread && <UnreadDot />}
-                  <StatusBadge status="pending" label={incoming ? "Your response" : "Awaiting them"} />
+                  <StatusBadge status={status.tone} label={status.label} />
                 </Link>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </section>
@@ -291,14 +311,13 @@ function MeetingList({ rows, tz, past }: { rows: Row[]; tz: string; past?: boole
                 past && "text-muted-foreground",
               )}
             >
-              <span className={cn("tabular flex w-20 flex-col items-center rounded-2xl px-2 py-2 text-center", past ? "bg-muted" : "bg-secondary text-secondary-foreground")}>
-                <span className="block text-[11px] font-bold uppercase">{formatDay(m.starts_at, tz)}</span>
-                <span className="block text-sm font-extrabold">{formatRange(m.starts_at, m.ends_at, tz).split(" – ")[0]}</span>
+              <span className="tabular w-24 leading-tight">
+                <span className="block text-sm font-bold">{formatRange(m.starts_at, m.ends_at, tz).split(" – ")[0]}</span>
+                <span className="block text-xs text-muted-foreground">{formatDay(m.starts_at, tz)}</span>
               </span>
               <span className="min-w-0 space-y-1">
                 <span className="flex min-w-0 items-center gap-2">
-                  <CompanyLogo name={counterpart?.name ?? "?"} logoUrl={counterpart?.logo_url ?? null} className="hidden size-7 rounded-lg sm:flex" />
-                  <span className="truncate font-bold">{counterpart?.name ?? "Unavailable company"}</span>
+                                    <span className="truncate font-bold">{counterpart?.name ?? "Unavailable organization"}</span>
                   {counterpart && <TierBadge tier={counterpart.tier} size="sm" />}
                 </span>
                 <span className="tabular block text-sm text-muted-foreground">
@@ -316,18 +335,16 @@ function MeetingList({ rows, tz, past }: { rows: Row[]; tz: string; past?: boole
 
 function SectionTitle({ id, count, children }: { id: string; count: number; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="flex items-center gap-2 text-lg">
+    <h2 id={id} className="flex items-baseline gap-2 text-lg">
       {children}
-      <span className="tabular inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-bold text-muted-foreground">
-        {count}
-      </span>
+      <span className="tabular text-sm font-semibold text-muted-foreground">{count}</span>
     </h2>
   )
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-start rounded-3xl border border-dashed border-input bg-card/60 px-5 py-6 text-sm text-muted-foreground">
+    <div className="flex flex-col items-start text-sm text-muted-foreground">
       {children}
     </div>
   )

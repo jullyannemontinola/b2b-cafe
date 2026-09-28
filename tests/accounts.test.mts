@@ -153,9 +153,9 @@ describe("organizer and company accounts", () => {
     assert.equal((await db.from("company_accounts").select("*")).data?.length ?? 0, 0)
     assert.equal((await register(db, "sneaky")).error?.message, "not_authorized")
     assert.ok((await db.rpc("auth_user_id_by_email", { p_email: "x@test.invalid" })).error, "lookup should be service-only")
-    await db.from("companies").update({ tier: "premium", is_active: false }).eq("id", companyB.id)
-    const { data: b } = await service.from("companies").select("tier, is_active").eq("id", companyB.id).single()
-    assert.deepEqual(b, { tier: "access", is_active: true })
+    await db.from("companies").update({ tier: "premium" }).eq("id", companyB.id)
+    const { data: b } = await service.from("companies").select("tier").eq("id", companyB.id).single()
+    assert.deepEqual(b, { tier: "access" })
     await db.from("app_users").update({ is_admin: true, company_id: null }).neq("id", "00000000-0000-0000-0000-000000000000")
     const { data: users } = await service.from("app_users").select("is_admin, company_id").eq("company_id", companyA.id)
     assert.deepEqual(users, [{ is_admin: false, company_id: companyA.id }])
@@ -282,31 +282,19 @@ describe("logo storage", () => {
   })
 })
 
-describe("deactivation", () => {
-  test("9. a deactivated company with a live session can't schedule", async () => {
-    // Reuse the A→B thread from test 2 (B is the responder).
-    const { data: existing } = await service
-      .from("threads")
-      .select("id, current_version")
-      .or(`and(company_a_id.eq.${companyA.id},company_b_id.eq.${companyB.id}),and(company_a_id.eq.${companyB.id},company_b_id.eq.${companyA.id})`)
-      .single()
-    const threadId = existing!.id
-
-    await service.from("companies").update({ is_active: false }).eq("id", companyB.id)
-    try {
-      const tries = [
-        await companyB.db.rpc("accept_offer", { p_thread: threadId, p_expected_version: existing!.current_version }),
-        await companyB.db.rpc("propose_meeting", { p_target: companyA.id, ...at("12:00") }),
-      ]
-      for (const r of tries) assert.equal(r.error?.message, "not_authorized")
-      assert.equal((await companyB.db.from("companies").select("id")).data?.length ?? 0, 0, "inactive company still sees the directory")
-      const { data: dir } = await companyA.db.from("companies").select("id")
-      assert.ok(!dir!.some((c) => c.id === companyB.id), "inactive company still listed")
-      // Nothing was cancelled: the thread still exists for monitoring.
-      assert.equal((await admin.from("threads").select("id").eq("id", threadId)).data!.length, 1)
-    } finally {
-      await service.from("companies").update({ is_active: true }).eq("id", companyB.id)
-    }
+describe("participants and dashboard", () => {
+  test("9. every linked participant can use the app: there is no separate activation state", async () => {
+    const { data: col } = await service.from("companies").select("*").eq("id", companyB.id).single()
+    assert.ok(!("is_active" in col!), "companies.is_active still exists")
+    // B sees the whole directory and can check availability and request a meeting.
+    const { count } = await service.from("companies").select("*", { count: "exact", head: true })
+    assert.equal((await companyB.db.from("companies").select("id")).data?.length, count)
+    const { data: slots, error } = await companyB.db.rpc("slot_availability", { p_target: companyA.id, p_date: "2026-11-10" })
+    assert.equal(error, null, error?.message)
+    assert.ok(slots!.length > 0)
+    const c = await seedCompany("c")
+    const { error: pe } = await companyB.db.rpc("propose_meeting", { p_target: c.id, ...at("12:30") })
+    assert.equal(pe, null, pe?.message)
   })
 
   test("11. dashboard counts come from stored records and exclude organizers", async () => {

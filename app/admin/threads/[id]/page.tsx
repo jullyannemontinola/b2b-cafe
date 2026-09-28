@@ -3,13 +3,14 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeftIcon, EyeIcon } from "lucide-react"
 import { CompanyLogo } from "@/components/company-logo"
-import { StatusBadge } from "@/components/status-badge"
+import { RequestBadge } from "@/components/status-badge"
 import { TierBadge } from "@/components/tier-badge"
 import { ConfirmedMeeting, OfferHistory, THREAD_DETAIL_COLUMNS } from "@/components/thread-parts"
+import { NAV } from "@/lib/copy"
 import { formatDay, formatRange, getEventConfig, tzLabel } from "@/lib/event"
 import { createClient, requireAdmin } from "@/lib/supabase/server"
 
-export const metadata: Metadata = { title: "Negotiation" }
+export const metadata: Metadata = { title: "Meeting request" }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -25,20 +26,20 @@ export default async function AdminThreadPage({ params }: PageProps<"/admin/thre
   const { data: t } = await supabase.from("threads").select(THREAD_DETAIL_COLUMNS).eq("id", id).maybeSingle()
   if (!t) notFound()
 
-  const nameOf = (companyId: string) => (companyId === t.company_a_id ? t.company_a?.name : t.company_b?.name) ?? "Company"
+  const nameOf = (companyId: string) => (companyId === t.company_a_id ? t.company_a?.name : t.company_b?.name) ?? "Participant"
   const latest = [...t.offers].sort((x, y) => y.version - x.version)[0]
   const waitingOn = latest.proposer_company_id === t.company_a_id ? t.company_b?.name : t.company_a?.name
 
   return (
     <div className="space-y-6">
       <Link href="/admin/meetings?view=negotiations" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
-        <ArrowLeftIcon className="size-4" /> Negotiations
+        <ArrowLeftIcon className="size-4" /> {NAV.meetings}
       </Link>
 
       <header className="flex flex-wrap items-center gap-4">
         <div className="flex -space-x-3">
           {[t.company_a, t.company_b].map((c, i) => (
-            <CompanyLogo key={i} name={c?.name ?? "?"} logoUrl={c?.logo_url ?? null} className="size-12 ring-4 ring-background" />
+            <CompanyLogo key={i} id={c?.id} name={c?.name ?? "?"} logoUrl={c?.logo_url ?? null} className="size-12 ring-4 ring-background" />
           ))}
         </div>
         <div className="min-w-0 flex-1">
@@ -57,7 +58,7 @@ export default async function AdminThreadPage({ params }: PageProps<"/admin/thre
             <EyeIcon className="size-4" /> Organizer view, read-only
           </p>
         </div>
-        <StatusBadge status={t.status} />
+        <RequestBadge status={t.status} waitingOn={waitingOn ?? "a participant"} revised={t.current_version > 1} />
       </header>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
@@ -66,12 +67,12 @@ export default async function AdminThreadPage({ params }: PageProps<"/admin/thre
         ) : (
           <section className="panel space-y-2 p-5 sm:p-7">
             <p className="text-sm font-semibold text-muted-foreground">
-              {t.status === "declined" ? "Declined offer" : `Latest offer, waiting on ${waitingOn}`}
+              {t.status === "declined" ? "Declined time" : `Latest proposed time · Awaiting ${waitingOn}`}
             </p>
             <p className="tabular text-2xl font-extrabold tracking-tight">
               {formatDay(latest.starts_at, tz)} · {formatRange(latest.starts_at, latest.ends_at, tz)}
             </p>
-            <p className="text-sm text-muted-foreground">{tzLabel(tz)}. Pending offers don’t reserve a table.</p>
+            <p className="text-sm text-muted-foreground">{tzLabel(tz)} (UTC+8). Not reserved until confirmed.</p>
           </section>
         )}
         <section aria-labelledby="history" className="panel space-y-4 p-5 sm:p-6">
@@ -82,7 +83,6 @@ export default async function AdminThreadPage({ params }: PageProps<"/admin/thre
             threadStatus={t.status}
             acceptedOfferId={t.meetings?.offer_id ?? null}
             nameOf={nameOf}
-            tierOf={(id) => (id === t.company_a_id ? t.company_a?.tier : t.company_b?.tier) ?? null}
             tz={tz}
           />
         </section>

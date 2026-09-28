@@ -39,7 +39,7 @@ export async function provisionAccount(
     .select("login_email, user_id, status")
     .eq("company_id", companyId)
     .single()
-  if (error || !account) return { status: "pending", error: "This company has no account record." }
+  if (error || !account) return { status: "pending", error: "This participant has no account record." }
   if (account.status === "active") return { status: "active", error: null }
 
   const record = async (patch: Record<string, unknown>) => {
@@ -51,7 +51,7 @@ export async function provisionAccount(
   if (!userId) {
     const { data: existing } = await service.rpc("auth_user_id_by_email", { p_email: account.login_email })
     if (existing) {
-      const message = "A login with this email already exists and isn't linked to this company. Use a different login email."
+      const message = "A login with this email already exists and isn't linked to this participant. The login email can't be reused."
       await record({ last_error: message })
       return { status: "pending", error: message }
     }
@@ -84,7 +84,7 @@ export async function provisionAccount(
     .upsert({ id: userId, company_id: companyId, is_admin: false }, { onConflict: "id", ignoreDuplicates: true })
   const { data: link } = await service.from("app_users").select("company_id, is_admin").eq("id", userId).maybeSingle()
   if (linkError || link?.company_id !== companyId || link.is_admin) {
-    const message = "The login couldn't be linked to this company."
+    const message = "The login couldn't be linked to this participant."
     await record({ last_error: message })
     return { status: "account_created", error: message }
   }

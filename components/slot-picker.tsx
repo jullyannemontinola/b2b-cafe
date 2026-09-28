@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { CheckIcon, Loader2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { counterOffer, proposeMeeting, type ActionResult } from "@/app/actions"
+import { HelpButton } from "@/components/help"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,11 +19,13 @@ type Mode =
 export function SlotPicker({
   days,
   timezoneLabel,
+  counterpartName,
   mode,
   onDone,
 }: {
   days: SlotDay[]
   timezoneLabel: string
+  counterpartName: string
   mode: Mode
   onDone?: () => void
 }) {
@@ -43,7 +46,7 @@ export function SlotPicker({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!slot) return setError("Choose a time slot first.")
+    if (!slot) return setError("Choose a time first.")
     setError(null)
     startTransition(async () => {
       let result: ActionResult
@@ -64,7 +67,7 @@ export function SlotPicker({
         setSelected(null)
         return
       }
-      toast.success(mode.kind === "propose" ? "Proposal sent" : "Counterproposal sent")
+      toast.success(mode.kind === "propose" ? `Request sent to ${counterpartName}` : `New time sent to ${counterpartName}`)
       onDone?.()
       if (result.threadId) router.push(`/inbox/${result.threadId}`)
     })
@@ -97,15 +100,30 @@ export function SlotPicker({
         </div>
       </fieldset>
 
-      <fieldset className="space-y-4">
-        <legend className="mb-1 flex w-full flex-wrap items-baseline justify-between gap-2 text-sm font-bold">
-          Time
-          <span className="text-xs font-medium text-muted-foreground">{timezoneLabel} · 30-minute meetings</span>
-        </legend>
-        {groups.length === 0 && <p className="text-sm text-muted-foreground">No slots on this day.</p>}
+      <fieldset className="relative space-y-4">
+        <legend className="mb-1 text-sm font-bold">Time</legend>
+        {/* Beside the legend, not inside it, so the help button stays out of the group's name. */}
+        <div className="absolute -top-1.5 right-0 flex items-center">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            {timezoneLabel} (UTC+8) · 30 minutes
+            <HelpButton title="Choosing a meeting time" more="/help?topic=requesting" className="-my-1.5">
+              <p>Times are in {timezoneLabel}. Each meeting is 30 minutes.</p>
+              <p>
+                An unavailable time shows why: you or {counterpartName} already has a confirmed meeting then, no table is
+                available, or the time has passed.
+              </p>
+              <p>
+                “Dedicated table” means the meeting uses a Premium organization’s own table, so only your two schedules matter. Otherwise the
+                number shows how many shared tables are still free.
+              </p>
+              <p>Availability is checked again when the meeting is confirmed.</p>
+            </HelpButton>
+          </span>
+        </div>
+        {groups.length === 0 && <p className="text-sm text-muted-foreground">No meeting times on this day.</p>}
         {groups.map((g) => (
           <div key={g.period} className="space-y-2">
-            <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">{g.period}</p>
+            <p className="text-sm font-semibold text-muted-foreground">{g.period}</p>
             <div className="grid grid-cols-2 gap-2 min-[480px]:grid-cols-3">
               {g.slots.map((s) => (
                 <SlotOption key={s.startsAt} slot={s} checked={s.startsAt === selected} disabled={pending} onSelect={() => setSelected(s.startsAt)} />
@@ -114,7 +132,8 @@ export function SlotPicker({
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          Availability is a guide. The time is only reserved once the other company accepts.
+          {mode.kind === "propose" ? "Sending a request doesn’t reserve the time." : "Suggesting a time doesn’t reserve it."} It’s
+          confirmed once {counterpartName} accepts and a table is assigned.
         </p>
       </fieldset>
 
@@ -142,7 +161,7 @@ export function SlotPicker({
         <p className="tabular text-sm" aria-live="polite">
           {slot && slotDay ? (
             <>
-              <span className="font-bold">{slotDay.label}</span>, {slot.label}
+              <span className="font-bold">{slotDay.label}</span>, {slot.label} <span className="text-muted-foreground">{timezoneLabel}</span>
             </>
           ) : (
             <span className="text-muted-foreground">No time selected</span>
@@ -150,7 +169,7 @@ export function SlotPicker({
         </p>
         <Button type="submit" size="lg" disabled={pending || !slot}>
           {pending && <Loader2Icon className="animate-spin" />}
-          {mode.kind === "propose" ? "Send proposal" : "Send counterproposal"}
+          {mode.kind === "propose" ? "Send request" : "Send new time"}
         </Button>
       </div>
     </form>
@@ -162,10 +181,10 @@ function SlotOption({ slot, checked, disabled, onSelect }: { slot: Slot; checked
   return (
     <label
       className={cn(
-        "relative flex min-h-16 flex-col justify-center rounded-2xl border px-3.5 py-2.5 transition-[background-color,border-color,box-shadow] duration-150 has-focus-visible:ring-3 has-focus-visible:ring-ring/40",
+        "relative flex min-h-16 flex-col justify-center rounded-xl border px-3.5 py-2.5 transition-[background-color,border-color,box-shadow] duration-150 has-focus-visible:ring-3 has-focus-visible:ring-ring/40",
         unavailable && "cursor-not-allowed border-dashed border-input bg-muted/60 text-muted-foreground",
         !unavailable && !checked && "cursor-pointer border-border bg-card hover:border-primary/50 hover:bg-secondary/40",
-        checked && "cursor-pointer border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_rgb(21_84_240/0.8)]",
+        checked && "cursor-pointer border-primary bg-primary text-primary-foreground",
       )}
     >
       <input
@@ -180,7 +199,7 @@ function SlotOption({ slot, checked, disabled, onSelect }: { slot: Slot; checked
       />
       <span className={cn("tabular text-[15px] font-bold", unavailable && "font-semibold")}>{slot.startLabel}</span>
       <span className={cn("text-xs", checked ? "text-primary-foreground/85" : unavailable ? "" : "text-muted-foreground")}>
-        {slot.reason ?? `${slot.freeTables} ${slot.freeTables === 1 ? "table" : "tables"} free`}
+        {slot.reason ?? (slot.dedicated ? "Dedicated table" : `${slot.freeTables} ${slot.freeTables === 1 ? "table" : "tables"} available`)}
       </span>
       {checked && (
         <span aria-hidden className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-white text-primary">

@@ -42,9 +42,9 @@ function readCompany(form: FormData, { withLogin }: { withLogin: boolean }) {
     values[key] = text(form, key)
   }
   const errors: Record<string, string> = {}
-  if (!values.name) errors.name = "Enter the company name."
+  if (!values.name) errors.name = "Enter the organization name."
   if (!EMAIL.test(values.contact_email)) errors.contact_email = "Enter a valid business email."
-  if (!values.contact_name) errors.contact_name = "Enter the primary contact’s name."
+  if (!values.contact_name) errors.contact_name = "Enter the contact person’s name."
   if (!/^[+\d][\d\s()-]{6,}$/.test(values.contact_phone)) errors.contact_phone = "Enter a contact number, e.g. +63 917 555 0100."
   if (!TIERS.includes(values.tier as (typeof TIERS)[number])) errors.tier = "Choose a B2B tier."
   if (!values.business_type) errors.business_type = "Enter the business type."
@@ -59,7 +59,7 @@ function readCompany(form: FormData, { withLogin }: { withLogin: boolean }) {
 // Checks declared type, size and the file's actual signature bytes.
 async function readLogo(form: FormData, required: boolean): Promise<{ file?: File; ext?: string; error?: string }> {
   const file = form.get("logo")
-  if (!(file instanceof File) || file.size === 0) return required ? { error: "Upload the company logo." } : {}
+  if (!(file instanceof File) || file.size === 0) return required ? { error: "Upload the organization’s logo." } : {}
   const ext = LOGO_TYPES[file.type]
   if (!ext) return { error: "Use a PNG, JPEG or WebP image." }
   if (file.size > MAX_LOGO_BYTES) return { error: "The logo must be 5 MB or smaller." }
@@ -81,14 +81,14 @@ async function uploadLogo(file: File, ext: string) {
 }
 
 const registerErrors: Record<string, [string, string]> = {
-  company_exists: ["name", "A company with this name is already registered."],
+  company_exists: ["name", "An organization with this name is already registered."],
   login_email_in_use: ["login_email", "This login email already belongs to an account. Use a different one."],
   invalid_email: ["login_email", "Check the business and login email addresses."],
   missing_fields: ["name", "Fill in every required field."],
 }
 
 export async function registerCompany(_: FormState, form: FormData): Promise<FormState> {
-  if (!(await isAdmin())) return { ok: false, message: "Only organizers can register companies." }
+  if (!(await isAdmin())) return { ok: false, message: "Only organizers can add participants." }
 
   const { values, errors } = readCompany(form, { withLogin: true })
   const logo = await readLogo(form, true)
@@ -115,7 +115,7 @@ export async function registerCompany(_: FormState, form: FormData): Promise<For
   })
   if (error) {
     await supabase.storage.from("company-logos").remove([uploaded.path])
-    const [field, message] = registerErrors[error.message] ?? ["", "The company couldn’t be saved. Try again."]
+    const [field, message] = registerErrors[error.message] ?? ["", "The participant couldn’t be saved. Try again."]
     return { ok: false, values, message, fieldErrors: field ? { [field]: message } : undefined }
   }
 
@@ -133,7 +133,7 @@ export async function retryAccountSetup(companyId: string): Promise<ProvisionRes
 }
 
 export async function updateCompany(companyId: string, _: FormState, form: FormData): Promise<FormState> {
-  if (!(await isAdmin())) return { ok: false, message: "Only organizers can edit companies." }
+  if (!(await isAdmin())) return { ok: false, message: "Only organizers can edit participants." }
   const { values, errors } = readCompany(form, { withLogin: false })
   const logo = await readLogo(form, false)
   if (logo.error) errors.logo = logo.error
@@ -163,23 +163,72 @@ export async function updateCompany(companyId: string, _: FormState, form: FormD
       ...(logoUrl ? { logo_url: logoUrl } : {}),
     })
     .eq("id", companyId)
+  if (error?.message === "dedicated_table_in_use") {
+    const message = dedicatedInUse(error.details)
+    return { ok: false, values, message, fieldErrors: { tier: "Can’t change the B2B tier while it hosts upcoming meetings." } }
+  }
   if (error) {
     const duplicate = error.code === "23505"
     return {
       ok: false,
       values,
-      message: duplicate ? "Another company already uses this name." : "The changes couldn’t be saved. Try again.",
-      fieldErrors: duplicate ? { name: "Another company already uses this name." } : undefined,
+      message: duplicate ? "Another organization already uses this name." : "The changes couldn’t be saved. Try again.",
+      fieldErrors: duplicate ? { name: "Another organization already uses this name." } : undefined,
     }
   }
   refresh()
-  return { ok: true, message: "Profile saved." }
+  return { ok: true, message: "Organization details saved." }
 }
 
-export async function setParticipation(companyId: string, active: boolean) {
-  if (!(await isAdmin())) return { ok: false, error: "Only organizers can do this." }
+// ---------------------------------------------------------------------------
+// Tables. The database functions re-check the organizer, lock against
+// bookings, and never apply part of a change.
+// ---------------------------------------------------------------------------
+
+export type SharedTablePlan = {
+  ok: boolean
+  applied?: boolean
+  active: number
+  requested: number
+  activate?: string[]
+  create?: string[]
+  deactivate?: string[]
+  booked_tables?: number
+  blocked?: { table: string; starts_at: string; ends_at: string; companies: string }[]
+  error?: string
+}
+
+export async function setSharedTables(date: string, count: number, apply: boolean): Promise<SharedTablePlan> {
+  if (!Number.isInteger(count) || count < 0) return { ok: false, active: 0, requested: count, error: "Enter a whole number, 0 or more." }
+  if (count > 500) return { ok: false, active: 0, requested: count, error: "Enter 500 or fewer." }
   const supabase = await createClient()
-  const { error } = await supabase.from("companies").update({ is_active: active }).eq("id", companyId)
-  refresh()
-  return error ? { ok: false, error: "The status couldn’t be changed. Try again." } : { ok: true, error: null }
+  const { data, error } = await supabase.rpc("admin_set_shared_tables", { p_date: date, p_count: count, p_apply: apply })
+  if (error) {
+    const message =
+      error.message === "not_authorized" ? "Only organizers can change tables." : error.message === "invalid_date" ? "Choose an event day." : "The tables couldn’t be updated. Try again."
+    return { ok: false, active: 0, requested: count, error: message }
+  }
+  if (apply) refresh()
+  return data as SharedTablePlan
+}
+
+export type VenuePlan = {
+  ok: boolean
+  applied: boolean
+  changes: { meeting_id: string; starts_at: string; ends_at: string; companies: string; from: string; to: string | null; conflict: boolean }[]
+  error?: string
+}
+
+export async function reconcileVenues(apply: boolean): Promise<VenuePlan> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("admin_reconcile_venues", { p_apply: apply })
+  if (error) return { ok: false, applied: false, changes: [], error: "The venue review couldn’t run. Try again." }
+  if (apply) refresh()
+  return data as VenuePlan
+}
+
+// Readable message when a tier change would strand bookings
+// on a Premium organization's dedicated table.
+function dedicatedInUse(details: string | null) {
+  return `This organization hosts upcoming confirmed meetings on its dedicated table, so the change wasn’t saved. Resolve these first: ${details ?? "see Meetings"}.`
 }

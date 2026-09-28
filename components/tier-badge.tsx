@@ -5,27 +5,24 @@ import { cn } from "@/lib/utils"
 export const TIERS = ["premium", "access", "matching_pool"] as const
 export type Tier = (typeof TIERS)[number]
 
-export const tierMeta: Record<Tier, { label: string; section: string; icon: LucideIcon; badge: string; card: string }> = {
+export const tierMeta: Record<Tier, { label: string; section: string; icon: LucideIcon; badge: string }> = {
   premium: {
     label: "Premium",
     section: "B2B Premium",
     icon: CrownIcon,
     badge: "border-tier-premium-border bg-tier-premium-surface text-tier-premium",
-    card: "border-tier-premium-border",
   },
   access: {
     label: "Access",
     section: "B2B Access",
     icon: LayersIcon,
     badge: "border-tier-access-border bg-tier-access-surface text-tier-access",
-    card: "border-tier-access-border",
   },
   matching_pool: {
     label: "Matching Pool",
     section: "B2B Matching Pool",
     icon: UsersRoundIcon,
     badge: "border-tier-pool-border bg-tier-pool-surface text-tier-pool",
-    card: "border-tier-pool-border",
   },
 }
 

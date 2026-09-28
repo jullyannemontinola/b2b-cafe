@@ -1,19 +1,18 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ChevronRightIcon, SlidersHorizontalIcon } from "lucide-react"
-import { EmptyState, PageHeader } from "@/components/app-shell"
-import { StatusBadge } from "@/components/status-badge"
+import { ChevronRightIcon } from "lucide-react"
+import { FilterSelect } from "@/components/filter-select"
+import { EmptyState } from "@/components/app-shell"
+import { RequestBadge, StatusBadge } from "@/components/status-badge"
 import { TierBadge } from "@/components/tier-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NAV } from "@/lib/copy"
 import { formatDay, formatRange, getEventConfig, isPast, tzLabel } from "@/lib/event"
 import { createClient, requireAdmin } from "@/lib/supabase/server"
 import { cn } from "@/lib/utils"
 
-export const metadata: Metadata = { title: "Meetings" }
-
-const selectClass =
-  "h-11 w-full rounded-xl border border-input bg-card px-3.5 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
+export const metadata: Metadata = { title: NAV.meetings }
 
 export default async function AdminMeetingsPage({ searchParams }: PageProps<"/admin/meetings">) {
   await requireAdmin()
@@ -29,7 +28,12 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
   const dayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso))
   const matchesName = (a?: string, b?: string) => !q || `${a} ${b}`.toLowerCase().includes(q)
 
-  const { data: tables } = await supabase.from("meeting_tables").select("id, label").order("id")
+  const { data: tables } = await supabase
+    .from("meeting_tables")
+    .select("id, label, event_date, kind, number, companies(name)")
+    .order("event_date")
+    .order("kind")
+    .order("number")
 
   // ponytail: filters run in memory; fine for an event-sized dataset, move to SQL if it grows past a few thousand rows.
   let meetingRows: {
@@ -43,7 +47,7 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
     aTier: string | null
     bTier: string | null
   }[] = []
-  let threadRows: { id: string; status: "pending" | "confirmed" | "declined"; a: string; b: string; aTier: string | null; bTier: string | null; versions: number; latest: { starts_at: string; ends_at: string } | undefined; updated: string }[] = []
+  let threadRows: { id: string; status: "pending" | "confirmed" | "declined"; waitingOn: string | null; a: string; b: string; aTier: string | null; bTier: string | null; versions: number; latest: { starts_at: string; ends_at: string } | undefined; updated: string }[] = []
 
   if (view === "meetings") {
     const { data, error } = await supabase
@@ -72,7 +76,7 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
   } else {
     const { data, error } = await supabase
       .from("threads")
-      .select("id, status, current_version, last_activity_at, company_a:companies!threads_company_a_id_fkey(name, tier), company_b:companies!threads_company_b_id_fkey(name, tier), offers(version, starts_at, ends_at)")
+      .select("id, status, current_version, last_activity_at, company_a_id, company_a:companies!threads_company_a_id_fkey(name, tier), company_b:companies!threads_company_b_id_fkey(name, tier), offers(version, proposer_company_id, starts_at, ends_at)")
       .order("last_activity_at", { ascending: false })
     if (error) throw error
     threadRows = data
@@ -80,7 +84,9 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
       .filter((t) => matchesName(t.company_a?.name, t.company_b?.name))
       .map((t) => {
         const latest = t.offers.find((o) => o.version === t.current_version)
-        return { id: t.id, status: t.status, a: t.company_a?.name ?? "", b: t.company_b?.name ?? "", aTier: t.company_a?.tier ?? null, bTier: t.company_b?.tier ?? null, versions: t.current_version, latest, updated: t.last_activity_at }
+        // The organization that didn't send the latest time is the one to respond.
+        const waitingOn = t.status === "pending" && latest ? ((latest.proposer_company_id === t.company_a_id ? t.company_b?.name : t.company_a?.name) ?? "a participant") : null
+        return { id: t.id, status: t.status, waitingOn, a: t.company_a?.name ?? "", b: t.company_b?.name ?? "", aTier: t.company_a?.tier ?? null, bTier: t.company_b?.tier ?? null, versions: t.current_version, latest, updated: t.last_activity_at }
       })
       .filter((t) => !day || (t.latest && dayOf(t.latest.starts_at) === day))
   }
@@ -101,65 +107,78 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Meetings" description={`Monitor confirmed meetings and negotiations. Read-only; times in ${tzLabel(tz)}.`} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl leading-tight">{NAV.meetings}</h1>
+        <nav aria-label="Monitoring view" className="flex w-full gap-1 rounded-full bg-muted p-1 sm:w-fit">
+          {tab("meetings", "Confirmed meetings")}
+          {tab("negotiations", "Meeting requests")}
+        </nav>
+      </div>
 
-      <nav aria-label="Monitoring view" className="flex w-full gap-1 rounded-full bg-muted p-1 sm:w-fit">
-        {tab("meetings", "Confirmed meetings")}
-        {tab("negotiations", "Negotiations")}
-      </nav>
-
-      <form className="panel grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[1fr_1fr_1fr_1.4fr_auto] lg:items-end">
+      <form className="panel flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:p-5">
         {view === "negotiations" && <input type="hidden" name="view" value="negotiations" />}
-        <Filter label="Event day" htmlFor="day">
-          <select id="day" name="day" defaultValue={day} className={selectClass}>
-            <option value="">Both days</option>
-            {config.eventDates.map((d) => (
-              <option key={d} value={d}>
-                {formatDay(d, tz)}
-              </option>
-            ))}
-          </select>
+        <Filter label="Event day" htmlFor="day" className="sm:w-44">
+          <FilterSelect
+            id="day"
+            name="day"
+            defaultValue={day}
+            options={[{ value: "", label: "Both days" }, ...config.eventDates.map((d) => ({ value: d, label: formatDay(d, tz) }))]}
+          />
         </Filter>
-        {view === "meetings" ? (
-          <Filter label="Table" htmlFor="table">
-            <select id="table" name="table" defaultValue={table} className={selectClass}>
-              <option value="">All tables</option>
-              {tables?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+        {view === "meetings" && (
+          <Filter label="Table" htmlFor="table" className="sm:w-64">
+            <FilterSelect
+              id="table"
+              name="table"
+              defaultValue={table}
+              options={[
+                { value: "", label: "All tables" },
+                ...(tables ?? []).map((t) => ({
+                  value: String(t.id),
+                  label: `${formatDay(t.event_date, tz)} · ${t.label}${t.companies ? ` (${t.companies.name})` : ""}`,
+                })),
+              ]}
+            />
           </Filter>
-        ) : null}
-        <Filter label="Status" htmlFor="status">
-          <select id="status" name="status" defaultValue={status} className={selectClass}>
-            {view === "meetings" ? (
-              <>
-                <option value="">Upcoming and completed</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="past">Completed</option>
-              </>
-            ) : (
-              <>
-                <option value="">Any status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="declined">Declined</option>
-              </>
-            )}
-          </select>
+        )}
+        <Filter label="Status" htmlFor="status" className="sm:w-56">
+          <FilterSelect
+            id="status"
+            name="status"
+            defaultValue={status}
+            options={
+              view === "meetings"
+                ? [
+                    { value: "", label: "Upcoming and completed" },
+                    { value: "upcoming", label: "Upcoming" },
+                    { value: "past", label: "Completed" },
+                  ]
+                : [
+                    { value: "", label: "Any status" },
+                    { value: "pending", label: "Awaiting response" },
+                    { value: "confirmed", label: "Meeting confirmed" },
+                    { value: "declined", label: "Request declined" },
+                  ]
+            }
+          />
         </Filter>
-        <Filter label="Company" htmlFor="q">
-          <Input id="q" name="q" type="search" defaultValue={String(sp.q ?? "")} placeholder="Company name" />
+        <Filter label="Organization" htmlFor="q" className="sm:min-w-52 sm:flex-1">
+          <Input id="q" name="q" type="search" defaultValue={String(sp.q ?? "")} placeholder="Organization name" />
         </Filter>
-        <Button type="submit" className="h-11">
-          <SlidersHorizontalIcon /> Apply
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" className="h-11 flex-1 sm:flex-none">
+            Apply filters
+          </Button>
+          {(day || table || status || q) && (
+            <Button variant="ghost" className="h-11" nativeButton={false} render={<Link href={view === "meetings" ? "/admin/meetings" : "/admin/meetings?view=negotiations"} />}>
+              Clear
+            </Button>
+          )}
+        </div>
       </form>
 
       <p className="text-sm font-semibold text-muted-foreground" aria-live="polite">
-        {count} {view === "meetings" ? (count === 1 ? "meeting" : "meetings") : count === 1 ? "negotiation" : "negotiations"}
+        {count} {view === "meetings" ? (count === 1 ? "meeting" : "meetings") : count === 1 ? "meeting request" : "meeting requests"} · Times in {tzLabel(tz)} (UTC+8) · Read-only
       </p>
 
       {count === 0 ? (
@@ -192,18 +211,18 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
             <li key={t.id}>
               <Link
                 href={`/admin/threads/${t.id}`}
-                className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 transition-colors duration-150 hover:bg-secondary/40 sm:px-5 md:grid-cols-[minmax(0,1fr)_14rem_7rem_auto]"
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 transition-colors duration-150 hover:bg-secondary/40 sm:px-5 md:grid-cols-[minmax(0,1fr)_11rem_minmax(9rem,15rem)_auto]"
               >
                 <span className="min-w-0 text-sm">
                   <Pair a={t.a} aTier={t.aTier} b={t.b} bTier={t.bTier} />
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    {t.versions} {t.versions === 1 ? "offer" : "offers"}
+                    {t.versions} {t.versions === 1 ? "proposed time" : "proposed times"}
                   </span>
                 </span>
-                <StatusBadge status={t.status} />
-                <span className="tabular col-span-2 text-sm text-muted-foreground md:col-span-1 md:row-start-1 md:col-start-2">
+                <span className="tabular col-span-2 text-sm text-muted-foreground md:col-span-1">
                   {t.latest && `${formatDay(t.latest.starts_at, tz)} · ${formatRange(t.latest.starts_at, t.latest.ends_at, tz).split(" – ")[0]}`}
                 </span>
+                <RequestBadge status={t.status} waitingOn={t.waitingOn} revised={t.versions > 1} className="col-span-2 justify-self-start md:col-span-1" />
                 <ChevronRightIcon aria-hidden className="hidden size-5 text-muted-foreground md:block" />
               </Link>
             </li>
@@ -214,9 +233,9 @@ export default async function AdminMeetingsPage({ searchParams }: PageProps<"/ad
   )
 }
 
-function Filter({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
+function Filter({ label, htmlFor, className, children }: { label: string; htmlFor: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className={cn("flex flex-col gap-1.5", className)}>
       <label htmlFor={htmlFor} className="text-xs font-bold text-muted-foreground">
         {label}
       </label>

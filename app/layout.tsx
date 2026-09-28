@@ -8,7 +8,7 @@ const body = Manrope({ variable: "--font-body", subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: { default: "B2B Café", template: "%s · B2B Café" },
-  description: "Meeting scheduling for approved B2B Café companies, 10–11 November 2026.",
+  description: "Meeting scheduling for approved B2B Café participants, November 10–11, 2026.",
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
