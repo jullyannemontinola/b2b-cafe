@@ -8,6 +8,7 @@ export type Slot = {
   startLabel: string // "9:00 AM"
   period: "Morning" | "Afternoon"
   freeTables: number
+  dedicated: boolean // a Premium organization's dedicated table hosts this meeting
   // Why the slot can't be chosen right now, or null if it looks open.
   reason: string | null
 }
@@ -15,15 +16,16 @@ export type Slot = {
 export type SlotDay = { date: string; label: string; slots: Slot[] }
 
 // Advisory availability against a counterpart, for each event day. Acceptance
-// re-checks everything in the database, so this is only a guide.
-export async function getSlotDays(targetCompanyId: string) {
+// re-checks everything in the database, so this is only a guide. Pass the
+// request when suggesting another time so a Premium host's table stays the same.
+export async function getSlotDays(targetCompanyId: string, threadId?: string) {
   const config = await getEventConfig()
   const supabase = await createClient()
   const now = Date.now()
 
   const days = await Promise.all(
     config.eventDates.map(async (date): Promise<SlotDay> => {
-      const { data, error } = await supabase.rpc("slot_availability", { p_target: targetCompanyId, p_date: date })
+      const { data, error } = await supabase.rpc("slot_availability", { p_target: targetCompanyId, p_date: date, p_thread: threadId })
       if (error) throw error
       return {
         date,
@@ -35,15 +37,20 @@ export async function getSlotDays(targetCompanyId: string) {
           startLabel: formatTime(s.starts_at, config.timezone),
           period: localHour(s.starts_at, config.timezone) < 12 ? "Morning" : "Afternoon",
           freeTables: s.free_tables,
+          dedicated: s.dedicated,
           reason:
             new Date(s.starts_at).getTime() <= now
-              ? "Already started"
+              ? "Time has passed"
               : s.self_busy
-                ? "You’re booked"
+                ? "You have a meeting"
                 : s.target_busy
-                  ? "They’re booked"
-                  : s.free_tables === 0
-                    ? "No tables free"
+                  ? "They have a meeting"
+                  : s.table_missing
+                    ? "No dedicated table set up"
+                    : s.free_tables === 0
+                      ? s.dedicated
+                        ? "Dedicated table booked"
+                        : "No tables available"
                     : null,
         })),
       }

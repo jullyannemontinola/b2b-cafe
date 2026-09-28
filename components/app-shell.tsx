@@ -10,12 +10,14 @@ export function AppShell({
   nav,
   who,
   role,
+  demo = false,
   children,
 }: {
   home: string
   nav: NavItem[]
   who: string
   role: string
+  demo?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -43,28 +45,13 @@ export function AppShell({
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      {demo && (
+        <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-xs text-muted-foreground sm:px-6">
+          Demo environment: organization names are used as test data only and don’t indicate participation in B2B Café.
+        </footer>
+      )}
     </>
-  )
-}
-
-export function PageHeader({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description?: React.ReactNode
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-1.5">
-        <h1 className="text-[28px] leading-tight sm:text-[34px]">{title}</h1>
-        {description && <p className="max-w-2xl text-muted-foreground">{description}</p>}
-      </div>
-      {children}
-    </div>
   )
 }
 

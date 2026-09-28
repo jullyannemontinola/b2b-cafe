@@ -18,7 +18,6 @@ const service = createClient(url, secret, opts)
 
 type Co = { id: string; userId: string; db: SupabaseClient; name: string }
 const co: Record<string, Co> = {}
-let inactiveCompanyId = ""
 let admin: Co
 let tableCount = 0
 
@@ -82,7 +81,8 @@ async function unread(c: Co, thread: string) {
 }
 
 before(async () => {
-  const { count } = await service.from("meeting_tables").select("*", { count: "exact", head: true }).eq("is_active", true)
+  // Test companies are non-Premium, so only Nov 11's active shared tables count.
+  const { count } = await service.from("meeting_tables").select("*", { count: "exact", head: true }).eq("is_active", true).eq("kind", "shared").eq("event_date", D2)
   tableCount = count ?? 0
   assert.ok(tableCount >= 1, "seed meeting tables first (npm run seed)")
   // The slots used below must be empty of existing (demo) meetings.
@@ -98,16 +98,10 @@ before(async () => {
   // Dedicated pairs for the table race: enough to fill every table at one slot, plus one.
   for (let i = 1; i <= 2 * (tableCount + 1); i++) await makeCompany(`r${pad(i)}`)
   await makeAdmin()
-  const { data: inactive } = await service
-    .from("companies")
-    .insert({ name: `zz Test inactive ${run}`, contact_email: "x@test.invalid", contact_name: "T", business_type: "T", tier: "premium", is_active: false })
-    .select("id")
-    .single()
-  inactiveCompanyId = inactive!.id
 })
 
 after(async () => {
-  const ids = [...Object.values(co).map((c) => c.id), inactiveCompanyId]
+  const ids = Object.values(co).map((c) => c.id)
   const { data: threads } = await service.from("threads").select("id").or(`company_a_id.in.(${ids}),company_b_id.in.(${ids})`)
   const threadIds = (threads ?? []).map((t) => t.id)
   if (threadIds.length) {
@@ -147,32 +141,33 @@ describe("access control", () => {
     assert.deepEqual(data, { status: "pending", current_version: 1 })
   })
 
-  test("3. active companies can browse other active profiles, not inactive ones", async () => {
+  test("3. participants can browse every registered participant", async () => {
     const { data } = await co.t01.db.from("companies").select("id, name, contact_email")
-    const ids = data!.map((c) => c.id)
-    assert.ok(ids.includes(co.t02.id))
-    assert.ok(!ids.includes(inactiveCompanyId))
+    const { count } = await service.from("companies").select("*", { count: "exact", head: true })
+    assert.ok(data!.some((c) => c.id === co.t02.id))
+    assert.equal(data!.length, count, "a registered participant is hidden from the directory")
     // Directory reads never expose login identities.
     const { data: users } = await co.t01.db.from("app_users").select("id")
     assert.deepEqual(users!.map((u) => u.id), [co.t01.userId])
   })
 
-  test("4. users cannot promote themselves, move company, or change activation", async () => {
+  test("4. users cannot promote themselves, move company, or change another organization", async () => {
     const u = co.t01
     await u.db.from("app_users").update({ is_admin: true }).eq("id", u.userId)
     await u.db.from("app_users").update({ company_id: co.t02.id }).eq("id", u.userId)
-    await u.db.from("companies").update({ is_active: false }).eq("id", co.t02.id)
+    await u.db.from("companies").update({ tier: "premium" }).eq("id", co.t02.id)
     const ins = await u.db.from("threads").insert({ company_a_id: co.t01.id, company_b_id: co.t02.id })
     assert.ok(ins.error, "direct thread insert should be refused")
     const { data: me } = await service.from("app_users").select("is_admin, company_id").eq("id", u.userId).single()
     assert.deepEqual(me, { is_admin: false, company_id: u.id })
-    const { data: other } = await service.from("companies").select("is_active").eq("id", co.t02.id).single()
-    assert.equal(other!.is_active, true)
+    const { data: other } = await service.from("companies").select("tier").eq("id", co.t02.id).single()
+    assert.equal(other!.tier, "access")
   })
 
   test("13. admins see all companies and meetings; ordinary users do not", async () => {
-    const { data: adminCos } = await admin.db.from("companies").select("id")
-    assert.ok(adminCos!.some((c) => c.id === inactiveCompanyId), "admin should see inactive companies")
+    const { count: companies } = await service.from("companies").select("*", { count: "exact", head: true })
+    const { count: adminCos } = await admin.db.from("companies").select("*", { count: "exact", head: true })
+    assert.equal(adminCos, companies)
     const { count: all } = await service.from("meetings").select("*", { count: "exact", head: true })
     const { count: adminCount } = await admin.db.from("meetings").select("*", { count: "exact", head: true })
     assert.equal(adminCount, all)

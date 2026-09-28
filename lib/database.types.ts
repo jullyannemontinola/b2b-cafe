@@ -3,7 +3,25 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "public": {
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
           Tables: {
             "app_users": {
                   Row: {
@@ -26,13 +44,13 @@ isOneToOne: true
                   ]
                 },"companies": {
                   Row: {
-                    "business_type": string,"contact_email": string,"contact_name": string,"contact_phone": string | null,"created_at": string,"description": string | null,"id": string,"is_active": boolean,"logo_url": string | null,"name": string,"partnership_interests": string | null,"products_services": string | null,"tier": Database["public"]['Enums']["company_tier"],"updated_at": string,"website": string | null
+                    "business_type": string,"contact_email": string,"contact_name": string,"contact_phone": string | null,"created_at": string,"description": string | null,"id": string,"is_demo": boolean,"logo_url": string | null,"name": string,"partnership_interests": string | null,"products_services": string | null,"tier": Database["public"]['Enums']["company_tier"],"updated_at": string,"website": string | null
                   }
                   Insert: {
-                    "business_type": string,"contact_email": string,"contact_name": string,"contact_phone"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"logo_url"?: string | null,"name": string,"partnership_interests"?: string | null,"products_services"?: string | null,"tier": Database["public"]['Enums']["company_tier"],"updated_at"?: string,"website"?: string | null
+                    "business_type": string,"contact_email": string,"contact_name": string,"contact_phone"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"is_demo"?: boolean,"logo_url"?: string | null,"name": string,"partnership_interests"?: string | null,"products_services"?: string | null,"tier": Database["public"]['Enums']["company_tier"],"updated_at"?: string,"website"?: string | null
                   }
                   Update: {
-                    "business_type"?: string,"contact_email"?: string,"contact_name"?: string,"contact_phone"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"logo_url"?: string | null,"name"?: string,"partnership_interests"?: string | null,"products_services"?: string | null,"tier"?: Database["public"]['Enums']["company_tier"],"updated_at"?: string,"website"?: string | null
+                    "business_type"?: string,"contact_email"?: string,"contact_name"?: string,"contact_phone"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"is_demo"?: boolean,"logo_url"?: string | null,"name"?: string,"partnership_interests"?: string | null,"products_services"?: string | null,"tier"?: Database["public"]['Enums']["company_tier"],"updated_at"?: string,"website"?: string | null
                   }
                   Relationships: [
                     
@@ -96,16 +114,53 @@ isOneToOne: false
                   ]
                 },"meeting_tables": {
                   Row: {
-                    "created_at": string,"id": number,"is_active": boolean,"label": string,"location": string,"updated_at": string
+                    "created_at": string,"event_date": string,"id": number,"is_active": boolean,"kind": Database["public"]['Enums']["table_kind"],"label": string,"location": string,"number": number,"owner_company_id": string | null,"updated_at": string
                   }
                   Insert: {
-                    "created_at"?: string,"id"?: never,"is_active"?: boolean,"label": string,"location": string,"updated_at"?: string
+                    "created_at"?: string,"event_date": string,"id"?: never,"is_active"?: boolean,"kind"?: Database["public"]['Enums']["table_kind"],"label": string,"location": string,"number": number,"owner_company_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: never,"is_active"?: boolean,"label"?: string,"location"?: string,"updated_at"?: string
+                    "created_at"?: string,"event_date"?: string,"id"?: never,"is_active"?: boolean,"kind"?: Database["public"]['Enums']["table_kind"],"label"?: string,"location"?: string,"number"?: number,"owner_company_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "meeting_tables_owner_company_id_fkey"
+      columns: ["owner_company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"meeting_venue_changes": {
+                  Row: {
+                    "changed_at": string,"changed_by": string | null,"from_label": string,"from_table_id": number,"id": number,"meeting_id": string,"reason": string,"to_label": string,"to_table_id": number
+                  }
+                  Insert: {
+                    "changed_at"?: string,"changed_by"?: string | null,"from_label": string,"from_table_id": number,"id"?: never,"meeting_id": string,"reason": string,"to_label": string,"to_table_id": number
+                  }
+                  Update: {
+                    "changed_at"?: string,"changed_by"?: string | null,"from_label"?: string,"from_table_id"?: number,"id"?: never,"meeting_id"?: string,"reason"?: string,"to_label"?: string,"to_table_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "meeting_venue_changes_from_table_id_fkey"
+      columns: ["from_table_id"]
+isOneToOne: false
+      referencedRelation: "meeting_tables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "meeting_venue_changes_meeting_id_fkey"
+      columns: ["meeting_id"]
+isOneToOne: false
+      referencedRelation: "meetings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "meeting_venue_changes_to_table_id_fkey"
+      columns: ["to_table_id"]
+isOneToOne: false
+      referencedRelation: "meeting_tables"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"meetings": {
                   Row: {
@@ -197,8 +252,22 @@ isOneToOne: false
             "accept_offer":
 { Args: { "p_expected_version": number,"p_thread": string }; Returns: string
                            },
+"admin_blocked_requests":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "reason": string,"starts_at": string,"thread_id": string
+            }[]
+                           },
+"admin_reconcile_venues":
+{ Args: { "p_apply"?: boolean }; Returns: Json
+                           },
 "admin_register_company":
 { Args: { "p_business_type": string,"p_contact_email": string,"p_contact_name": string,"p_contact_phone": string,"p_description"?: string,"p_login_email": string,"p_logo_url": string,"p_name": string,"p_partnership_interests"?: string,"p_products_services"?: string,"p_tier": Database["public"]['Enums']["company_tier"],"p_website"?: string }; Returns: string
+                           },
+"admin_set_shared_tables":
+{ Args: { "p_apply"?: boolean,"p_count": number,"p_date": string }; Returns: Json
+                           },
+"apply_dedicated_tables":
+{ Args: { "p_company": string }; Returns: undefined
                            },
 "auth_user_id_by_email":
 { Args: { "p_email": string }; Returns: string
@@ -214,6 +283,9 @@ isOneToOne: false
                            },
 "decline_offer":
 { Args: { "p_expected_version": number,"p_thread": string }; Returns: undefined
+                           },
+"dedicated_bookings":
+{ Args: { "p_company": string }; Returns: string
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -243,17 +315,20 @@ isOneToOne: false
 "mark_thread_read":
 { Args: { "p_thread": string }; Returns: undefined
                            },
+"meeting_host":
+{ Args: { "p_a": string,"p_b": string,"p_first_proposer": string }; Returns: string
+                           },
 "propose_meeting":
 { Args: { "p_ends_at": string,"p_message"?: string,"p_starts_at": string,"p_target": string }; Returns: string
                            },
 "slot_availability":
-{ Args: { "p_date": string,"p_target": string }; Returns: {
-              "ends_at": string,"free_tables": number,"self_busy": boolean,"starts_at": string,"target_busy": boolean
+{ Args: { "p_date": string,"p_target": string,"p_thread"?: string }; Returns: {
+              "dedicated": boolean,"ends_at": string,"free_tables": number,"self_busy": boolean,"starts_at": string,"table_missing": boolean,"target_busy": boolean
             }[]
                            }
           }
           Enums: {
-            "account_status": "pending"|"account_created"|"invite_sent"|"invite_failed"|"active","company_tier": "premium"|"access"|"matching_pool","meeting_status": "confirmed","thread_status": "pending"|"confirmed"|"declined"
+            "account_status": "pending"|"account_created"|"invite_sent"|"invite_failed"|"active","company_tier": "premium"|"access"|"matching_pool","meeting_status": "confirmed","table_kind": "shared"|"dedicated","thread_status": "pending"|"confirmed"|"declined"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -367,9 +442,13 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "public": {
+  "graphql_public": {
           Enums: {
-            "account_status": ["pending", "account_created", "invite_sent", "invite_failed", "active"],"company_tier": ["premium", "access", "matching_pool"],"meeting_status": ["confirmed"],"thread_status": ["pending", "confirmed", "declined"]
+            
+          }
+        },"public": {
+          Enums: {
+            "account_status": ["pending", "account_created", "invite_sent", "invite_failed", "active"],"company_tier": ["premium", "access", "matching_pool"],"meeting_status": ["confirmed"],"table_kind": ["shared", "dedicated"],"thread_status": ["pending", "confirmed", "declined"]
           }
         }
 } as const

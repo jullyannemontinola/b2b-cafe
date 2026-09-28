@@ -1,18 +1,21 @@
 // Maps the error codes raised by the database functions to user-facing copy.
 const messages: Record<string, string> = {
-  not_authorized: "Your session has expired or your company is inactive. Sign in again.",
-  not_found: "This negotiation doesn't exist or isn't yours.",
-  self_proposal: "You can't propose a meeting to your own company.",
-  company_unavailable: "That company isn't available for meetings right now.",
-  invalid_slot: "That time isn't a valid event slot. Pick an open 30-minute slot on an event day.",
+  not_authorized: "Your session has ended or your organization isn’t participating. Sign in again.",
+  not_found: "This meeting request doesn’t exist or isn’t yours.",
+  self_proposal: "You can’t request a meeting with your own organization.",
+  company_unavailable: "This organization isn’t available for meetings right now.",
+  invalid_slot: "That isn’t an available meeting time. Choose another time.",
   message_too_long: "Keep the message under 1,000 characters.",
-  thread_exists: "You already have a negotiation with this company.",
-  thread_closed: "This negotiation is already closed.",
-  stale_offer: "This offer has been replaced by a newer one. The page now shows the latest offer.",
-  not_your_turn: "It's the other company's turn to respond.",
-  company_conflict: "One of you already has a confirmed meeting at that time. Counter with a different slot.",
-  no_table: "Every table is booked at that time. Counter with a different slot.",
-  booking_conflict: "Someone booked this time a moment ago. Availability has been refreshed; counter with a different slot.",
+  thread_exists: "You already have a meeting request with this organization. Open it from Meeting requests.",
+  thread_closed: "This meeting request is already closed.",
+  stale_offer: "The other organization has just responded. The page now shows the latest time.",
+  not_your_turn: "You’re awaiting the other organization’s response.",
+  company_conflict: "You or the other organization already has a confirmed meeting at this time. Suggest another time.",
+  no_table: "No tables are available at this time. Suggest another time.",
+  no_dedicated_table: "The Premium organization’s dedicated table isn’t set up for this day. Contact the B2B Café organizers.",
+  dedicated_table_busy: "The dedicated table for this meeting is already booked at this time. Suggest another time.",
+  table_wrong_day: "That table isn’t set up for this day. Contact the B2B Café organizers.",
+  booking_conflict: "This time is no longer available. Choose another time.",
 }
 
 export function friendlyError(raw: string | undefined) {

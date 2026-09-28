@@ -10,7 +10,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "seed": "node --env-file=.env.local scripts/seed.mts",
-    "test": "node --env-file=.env.local --test tests/*.test.mts"
+    "test": "node --env-file=.env.local --test --test-concurrency=1 tests/*.test.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

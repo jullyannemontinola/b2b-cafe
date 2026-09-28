@@ -9,8 +9,8 @@ Stack: Next.js 16 (App Router, TypeScript), Supabase (Postgres, Auth, RLS, Stora
 | | Organizer (admin) | Company user |
 |---|---|---|
 | Database | `app_users.is_admin = true`, `company_id = null` | `is_admin = false`, `company_id` = exactly one company |
-| Lands on | `/admin` (Overview, Companies, Meetings) | `/companies` (Directory, Inbox, Agenda) |
-| Can | Register companies, provision logins, edit profiles, activate or deactivate, read every company, negotiation and meeting | Browse active companies, propose, counter, accept, decline |
+| Lands on | `/admin` (Dashboard, Participants, Meetings, Tables, Help) | `/companies` (Participants, Meeting requests, My schedule, Help) |
+| Can | Register companies, provision logins, edit profiles, set shared tables, read every company, negotiation and meeting | Browse companies, propose, counter, accept, decline |
 | Cannot | Appear in the directory, hold a tier, propose, accept, counter, decline, or occupy a table | Read admin data, provision accounts, or change any role or company |
 
 The database enforces both columns together with a check constraint. Participant functions derive the caller's company from `current_company_id()`, which is empty for organizers, so they reject organizer accounts on their own. Each route group has its own server-side guard, and RLS applies underneath.
@@ -22,8 +22,23 @@ The database enforces both columns together with a check constraint. Participant
 - **Booking:** acceptance books both companies and the lowest free table in one transaction.
 - **Agenda and inbox:** unread badges for new offers and outcomes.
 - **Organizer overview:** live counts, companies by tier, meetings per day against table capacity, and upcoming meetings.
-- **Company management:** search and filter (awaiting setup, inactive); add an approved company with a logo upload; edit its profile; retry or resend setup; activate or deactivate participation.
+- **Company management:** search and filter (awaiting setup); add an approved company with a logo upload; edit its profile; retry or resend setup.
 - **Meeting monitoring:** filter by day, company, table and status; a negotiations view; a read-only thread history.
+
+## Interface terms
+
+Screens use event language; the database keeps its original names. `lib/copy.ts` holds the shared labels, event facts and `requestStatus()`, which words a request's status for the viewer (“Your response needed”, “Awaiting [organization]”, “Alternative time suggested”, “Meeting confirmed”, “Request declined”).
+
+| Database / route | Interface |
+|---|---|
+| `companies`, `/companies` | Participants, organization |
+| `threads`, `/inbox` | Meeting requests |
+| `offers` (propose / counter) | Request a meeting / Suggest another time |
+| `accept_offer` / `decline_offer` | Confirm meeting / Decline request |
+| `/agenda` | My schedule |
+| admin | Organizer |
+
+Help lives at `/help` and `/admin/help` (`components/help-page.tsx`). Contextual help uses `HelpButton` (`components/help.tsx`), a popover that leaves the page mounted so drafts and selected times survive.
 
 ## Local setup
 
@@ -48,6 +63,7 @@ Applying new migrations to an existing local database without wiping it: `npx su
 | `NEXT_PUBLIC_SITE_URL` | app (optional) | Base URL for setup-email links; defaults to the request origin |
 | `SUPABASE_SECRET_KEY` | **server only** | Auth administration during company provisioning (behind an admin check), plus seed and tests. Imported only through `lib/supabase/service.ts`, which is marked `server-only`. |
 | `SEED_PASSWORD` | scripts only | Password for seeded demo accounts |
+| `ORGANIZER_CONTACT_EMAIL` | server (optional) | Support address shown on the Help page. **Not configured:** the official event page publishes no direct organizer contact, so Help links to the event page until the organizers confirm an address. |
 
 ### Commands
 
@@ -57,15 +73,20 @@ Applying new migrations to an existing local database without wiping it: `npx su
 | `npm test` | Integration tests against the local stack |
 | `npm run typecheck` / `npm run lint` / `npm run build` | Checks |
 
+## Demo data
+
+The seed's demo organizations use real IT employer names (from a public employer ranking) purely as test fixtures. They are **not** event participants, and their tiers are arbitrary. Their profiles are marked as sample content, contact people are fictional, and every address uses the reserved `.test` domain, so no email can reach a real company. They have no logos, so the app shows a colour placeholder with initials. Demo records are flagged `is_demo`, and while any exist the app shows a one-line notice that names are test data.
+
+`npm run seed` finds demo organizations by their login email and updates them in place, so IDs, logins, requests and meetings are kept and re-runs never duplicate. It doesn't touch any other organization.
+
 ## Demo accounts
 
 Seeded accounts use `SEED_PASSWORD`:
 
 - **Organizer:** `organizer@b2bcafe.test`.
-- **Companies:** `kalinaw@`, `tanglaw@`, `bayanihan@`, `sariwa@`, `lakbay@` and `pandayan@b2bcafe.test`.
-- **Inactive company:** `dormant@b2bcafe.test`.
+- **Participants** (login = organization name): `oracle-philippines@` (Premium), `globe-telecom-ph@` (Premium), `dxc-technology-ph@`, `accenture-ph@`, `integrated-computer-systems@`, `infor-philippines@` and `ibm-philippines@b2bcafe.test`. The seed renames the earlier demo logins (`kalinaw@`, `tanglaw@`, …) in place, keeping the same accounts and passwords.
 
-Kalinaw Analytics was the admin in the first prototype. The migration converts that login into an ordinary company account and keeps all its data; the separate organizer account replaces it.
+The Oracle Philippines demo login (originally `kalinaw@`) was the admin in the first prototype. The migration converts that login into an ordinary company account and keeps all its data; the separate organizer account replaces it.
 
 ## Registering a company (organizer)
 
@@ -79,9 +100,37 @@ Kalinaw Analytics was the admin in the first prototype. The migration converts t
    - Every step can be re-run with **Retry account setup** or **Resend setup email**. Nothing is ever deleted as cleanup.
 4. **Recipient sets their password.** The email link goes to `/auth/confirm`, which verifies the one-time token on the server, then to `/setup-password`, where the recipient chooses a password and the account becomes `active`. Expired or reused links show a clear explanation.
 
-Account status (`pending`, `account_created`, `invite_sent`, `invite_failed`, `active`) is separate from participation (`is_active`). Deactivating a company hides it from the directory and blocks its scheduling in the database, even for an existing session. Its meetings are kept and still shown to organizers, and the organizer is warned how many upcoming meetings it has.
+Account status (`pending`, `account_created`, `invite_sent`, `invite_failed`, `active`) is the only access state. Every registered organization is an approved participant; it can sign in and schedule once its account is active. Participant deactivation was removed in `20260930100000_remove_participation_status.sql`: that migration made every organization a regular participant, keeping its account, profile and meetings, rewrote the functions and policy that checked the flag, and then dropped `companies.is_active`.
 
 Locally, setup emails are captured by Mailpit at http://127.0.0.1:54324.
+
+## Tables
+
+Migration `20260929100000_table_allocation.sql` (additive).
+
+- **Per day.** Every `meeting_tables` row belongs to one event day and is `shared` or `dedicated`. Labels (`Table 3`, `Premium table 2`) are unique per day, and numbers are never reused or renumbered. Tables are switched off (`is_active = false`), never deleted.
+- **Shared tables.** Organizers set the count per day in **Organizer → Tables**, which calls `admin_set_shared_tables(day, count, apply)`. Increases re-activate the lowest switched-off numbers first. Reductions switch off only tables without confirmed meetings; otherwise nothing changes and the blocking meetings are returned. The UI previews every reduction before it's applied. The count is organizer-declared capacity, not a check that the venue fits it.
+- **Dedicated tables.** A trigger on `companies` gives each Premium organization one dedicated table per event day. It fires when one is added or upgraded. A partial unique index `(owner_company_id, event_date)` makes this idempotent. Downgrading switches unused dedicated tables off, and is refused (`dedicated_table_in_use`, with the meetings listed) while the organization hosts upcoming confirmed meetings.
+- **Assumption:** Premium organizations attend both event days. There's no per-day attendance setting.
+
+Which table a meeting gets (`accept_offer`, mirrored by `slot_availability`):
+
+| Participants | Table |
+|---|---|
+| Neither Premium | Lowest-numbered free active shared table for that day |
+| One Premium | That organization's dedicated table for that day |
+| Both Premium | The dedicated table of the **original request's recipient** (the organization that didn't send version 1), unchanged by counterproposals. Both organizations are marked busy. |
+
+There is no fallback to shared capacity or to another organization's dedicated table. A missing or booked dedicated table fails with `no_dedicated_table` or `dedicated_table_busy`. Tiers are read at confirmation time, so pending requests follow the current rules. A trigger on `meetings` rejects a table from another day.
+
+**Concurrency.** Booking, capacity changes, dedicated-table changes and venue reassignment all take the same transaction-scoped advisory lock. A table therefore can't be switched off while another transaction books it, and the exclusion constraints on companies and tables remain the final guarantee.
+
+**Existing data and reconciliation.** The migration:
+1. Keeps the original tables as the first day's shared tables and copies them, with the same labels, for later days.
+2. Moves any later-day meeting to the same-labelled table for its day, logging each move in `meeting_venue_changes`. Labels are unchanged, so participants see no difference.
+3. Creates dedicated tables for the active Premium organizations.
+
+It does **not** move confirmed meetings that involve a Premium organization but sit on a shared table. **Organizer → Tables** lists them ("needs a table review") with the proposed dedicated table. `admin_reconcile_venues(apply)` moves all of them or none, logs each change, and marks the request as updated. Participants then see "Table changed by the organizers from … to …" on the meeting.
 
 ## How booking stays correct
 
@@ -106,7 +155,6 @@ They cover:
 - the full email-link setup and sign-in, using the Mailpit message
 - a simulated email failure followed by retry, and refusal to attach an unrelated existing login
 - Storage permissions, type and size limits
-- deactivation with a live session
 - dashboard counts
 
 ## Deploying to Vercel
@@ -122,7 +170,7 @@ They cover:
 
 ## Prototype assumptions and limitations
 
-- Operating hours (09:00–17:00 Manila) and four tables are placeholders (SRS decision D01).
+- Operating hours (09:00–17:00 Manila) and the seeded four shared tables per day are placeholders (SRS decision D01).
 - Contact details are visible to all active companies (D08).
 - Logos are publicly readable by URL (paths are random); writes are organizer-only.
 - Login emails can't be changed after registration; there is no identity-change flow yet.

@@ -8,7 +8,7 @@ import { friendlyError } from "@/lib/errors"
 // Thin wrappers: the database functions own every rule. These only forward the
 // user's session and translate error codes into copy.
 
-export type ActionResult = { ok: true; threadId?: string } | { ok: false; error: string; code?: string }
+export type ActionResult = { ok: true; threadId?: string; table?: string } | { ok: false; error: string; code?: string }
 
 function fail(message: string | undefined): ActionResult {
   return { ok: false, error: friendlyError(message), code: message }
@@ -82,9 +82,12 @@ export async function counterOffer(input: {
 
 export async function acceptOffer(threadId: string, expectedVersion: number): Promise<ActionResult> {
   const supabase = await createClient()
-  const { error } = await supabase.rpc("accept_offer", { p_thread: threadId, p_expected_version: expectedVersion })
+  const { data: meetingId, error } = await supabase.rpc("accept_offer", { p_thread: threadId, p_expected_version: expectedVersion })
   refresh()
-  return error ? fail(error.message) : { ok: true }
+  if (error) return fail(error.message)
+  // Only for the confirmation message; the booking itself is already done.
+  const { data } = await supabase.from("meetings").select("meeting_tables(label)").eq("id", meetingId).maybeSingle()
+  return { ok: true, table: data?.meeting_tables?.label }
 }
 
 export async function declineOffer(threadId: string, expectedVersion: number): Promise<ActionResult> {

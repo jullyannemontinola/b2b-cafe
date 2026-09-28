@@ -70,7 +70,7 @@ export function CompanyForm({
         </p>
       )}
 
-      <Section title="Company details" description="Shown to other participants on the company’s profile.">
+      <Section title="Organization details" description="Shown to other participants.">
         <div className="grid gap-5 @xl:grid-cols-[auto_1fr]">
           <div className="space-y-2">
             <span className="text-sm font-semibold" id="logo-label">
@@ -114,7 +114,7 @@ export function CompanyForm({
             )}
           </div>
           <div className="grid gap-4 @md:grid-cols-2">
-            <Field name="name" label="Company name" required defaultValue={values.name} error={err("name")} className="@md:col-span-2" />
+            <Field name="name" label="Organization name" required defaultValue={values.name} error={err("name")} className="@md:col-span-2" />
             <Field name="business_type" label="Business type" required defaultValue={values.business_type} error={err("business_type")} placeholder="e.g. Energy IoT" />
             <Field name="website" label="Website" type="url" defaultValue={values.website} error={err("website")} placeholder="https://" />
             <fieldset className="space-y-2 @md:col-span-2">
@@ -138,13 +138,13 @@ export function CompanyForm({
           </div>
         </div>
         <div className="grid gap-4 @3xl:grid-cols-3">
-          <Area name="description" label="Company description" defaultValue={values.description} error={err("description")} />
+          <Area name="description" label="Description" defaultValue={values.description} error={err("description")} />
           <Area name="products_services" label="Products or services" defaultValue={values.products_services} error={err("products_services")} />
           <Area name="partnership_interests" label="Partnership interests or topics" defaultValue={values.partnership_interests} error={err("partnership_interests")} />
         </div>
       </Section>
 
-      <Section title="Contact person" description="Participants see these details on the profile.">
+      <Section title="Contact person" description="Shown to other participants.">
         <div className="grid gap-4 @2xl:grid-cols-3">
           <Field name="contact_name" label="Full name" required defaultValue={values.contact_name} error={err("contact_name")} />
           <Field
@@ -167,8 +167,8 @@ export function CompanyForm({
         title="Platform account"
         description={
           mode === "create"
-            ? "We’ll email this address a secure link to set their own password. You never see or set it."
-            : "The login email can’t be changed here. It’s separate from the business email above."
+            ? "A setup link goes to this address. The contact sets their own password."
+            : "The login email can’t be changed after registration. It’s separate from the business email above."
         }
       >
         {mode === "create" ? (
@@ -195,7 +195,7 @@ export function CompanyForm({
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Button type="submit" size="lg" disabled={pending}>
           {pending && <Loader2Icon className="animate-spin" />}
-          {mode === "create" ? (pending ? "Registering…" : "Register and send setup email") : pending ? "Saving…" : "Save changes"}
+          {mode === "create" ? (pending ? "Adding…" : "Add participant and send setup email") : pending ? "Saving…" : "Save changes"}
         </Button>
       </div>
     </form>

@@ -44,7 +44,11 @@ export function OfferActions({
       setBusy(null)
       setConfirmDecline(false)
       if (!result.ok) return setError(result.error)
-      toast.success(kind === "accept" ? "Meeting confirmed. It’s on your agenda." : `You declined ${counterpartName}’s offer.`)
+      toast.success(
+        kind === "accept"
+          ? `Meeting confirmed${result.table ? ` · ${result.table}` : ""}. It’s in My schedule.`
+          : `Request from ${counterpartName} declined.`,
+      )
     })
   }
 
@@ -60,31 +64,31 @@ export function OfferActions({
         <div className="flex flex-wrap gap-2">
           <Button size="lg" disabled={pending} onClick={() => run("accept")}>
             {busy === "accept" && <Loader2Icon className="animate-spin" />}
-            Accept and book table
+            Confirm meeting
           </Button>
           <Button size="lg" variant="soft" disabled={pending} onClick={() => setCountering(true)}>
             Suggest another time
           </Button>
           <Button size="lg" variant="destructive" disabled={pending} onClick={() => setConfirmDecline(true)}>
-            <XCircleIcon /> Decline
+            <XCircleIcon /> Decline request
           </Button>
         </div>
       )}
       {confirmDecline && !countering && (
         <div role="alertdialog" aria-labelledby="decline-title" aria-describedby="decline-desc" className="space-y-3 rounded-2xl border-2 border-destructive-border bg-card p-4">
           <p id="decline-title" className="font-bold text-destructive">
-            Decline {counterpartName}’s offer for {offerLabel}?
+            Decline the request from {counterpartName} for {offerLabel}?
           </p>
           <p id="decline-desc" className="text-sm text-foreground/80">
-            This ends the negotiation. You won’t be able to meet {counterpartName} through the platform.
+            This closes the meeting request. Neither of you can send the other a new request through B2B Café.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="destructive" disabled={pending} onClick={() => run("decline")} autoFocus>
               {busy === "decline" && <Loader2Icon className="animate-spin" />}
-              Decline offer
+              Decline request
             </Button>
             <Button variant="outline" disabled={pending} onClick={() => setConfirmDecline(false)}>
-              Keep negotiating
+              Keep request open
             </Button>
           </div>
         </div>
@@ -98,9 +102,11 @@ export function OfferActions({
               Cancel
             </Button>
           </div>
+          <p className="-mt-2 text-sm text-muted-foreground">Choose another available time. {counterpartName} will need to confirm it.</p>
           <SlotPicker
             days={days}
             timezoneLabel={timezoneLabel}
+            counterpartName={counterpartName}
             mode={{ kind: "counter", threadId, expectedVersion: version }}
             onDone={() => setCountering(false)}
           />

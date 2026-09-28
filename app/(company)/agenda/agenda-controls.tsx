@@ -37,7 +37,7 @@ export function PendingToggle({ on }: { on: boolean }) {
       >
         <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow-soft transition-[left] duration-150", on ? "left-[18px]" : "left-0.5")} />
       </span>
-      Show pending proposals
+      Show pending requests
     </button>
   )
 }

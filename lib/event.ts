@@ -51,6 +51,11 @@ export function isPast(endIso: string) {
   return new Date(endIso).getTime() <= Date.now()
 }
 
+// True when the timestamp is more than `days` days ago (request time).
+export function olderThanDays(iso: string, days: number) {
+  return new Date(iso).getTime() < Date.now() - days * 86_400_000
+}
+
 // Local calendar date (YYYY-MM-DD) and minutes after midnight in the event timezone.
 export function localParts(iso: string, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
